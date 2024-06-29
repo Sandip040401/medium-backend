@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client/edge'
 import { withAccelerate } from '@prisma/extension-accelerate'
 import { Hono } from "hono";
 import { sign } from "hono/jwt";
+import { singinInput, singupInput } from '@iemsandip/medium-common-file';
 
 export const userRouter = new Hono<{
     Bindings: {
@@ -17,18 +18,32 @@ userRouter.post('/signup', async (c) => {
   
     const body = await c.req.json();
     
-    const user = await prisma.user.create({
-      data: {
-        email: body.email,
-        password: body.password,
-      },
-    });
-  
+    const { success } = singupInput.safeParse(body)
+    if(!success){
+      c.status(411)
+      return c.json({
+        message: "Inputs not correct"
+      })
+    }    
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email: body.email,
+          password: body.password,
+        },
+      });   
     const token = await sign({ id: user.id }, c.env.JWT_SECRET)
   
     return c.json({
       jwt: token
     })
+    } catch (err) {
+      c.status(409)
+      return c.json({
+        message: "User Already exists"
+      })
+    } 
+
 })
   
 userRouter.post('/signin', async (c) => {
@@ -37,6 +52,13 @@ userRouter.post('/signin', async (c) => {
     }).$extends(withAccelerate());
 
     const body = await c.req.json();
+    const { success } = singinInput.safeParse(body);
+    if(!success){
+      c.status(411)
+      return c.json({
+        message: "Inputs not correct"
+      })
+    } 
     const user = await prisma.user.findUnique({
         where: {
             email: body.email,
